@@ -1,0 +1,29 @@
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  padding: 20px;
+  overflow-y: auto;
+  margin-top: 64px; /* Adjust for header height */
+  margin-bottom: 64px; /* Adjust for footer height */
+}
+
+header,
+footer {
+  position: fixed;
+  width: 100%;
+  z-index: 1000;
+}
+
+header {
+  top: 0;
+}
+
+footer {
+  bottom: 0;
+}
