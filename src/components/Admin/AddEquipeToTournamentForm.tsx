@@ -15,6 +15,7 @@ import {
   Stack,
 } from "@mui/material";
 
+// 1. Definimos a interface de Props para que o componente saiba que vai receber 'torneioId'
 interface Props {
   torneioId: string;
 }
@@ -46,6 +47,7 @@ const AddEquipeToTournamentForm: React.FC<Props> = ({ torneioId }) => {
       await dispatch(
         addEquipeToTorneio({ torneioId, equipeId: selectedEquipeId })
       );
+      // Após adicionar, busca novamente os dados do torneio para atualizar a UI
       dispatch(fetchTorneioComEquipes(torneioId));
       setSelectedEquipeId("");
     }
@@ -57,14 +59,12 @@ const AddEquipeToTournamentForm: React.FC<Props> = ({ torneioId }) => {
         Adicionar Equipe ao Torneio
       </Typography>
 
-      {/* Se não houver mais equipes disponíveis, mostra uma mensagem */}
       {equipesDisponiveis.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
           Todas as equipes já foram adicionadas a este torneio.
         </Typography>
       ) : (
         <Stack direction="row" spacing={2} alignItems="center">
-          {/* Componentes MUI para o Select */}
           <FormControl fullWidth size="small">
             <InputLabel id="select-equipe-label">
               Selecione uma equipe disponível

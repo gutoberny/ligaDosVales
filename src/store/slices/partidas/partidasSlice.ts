@@ -155,15 +155,20 @@ export const gerarPlayoffs = createAsyncThunk(
   "partidas/gerarPlayoffs",
   async (payload: GerarPlayoffsPayload, { dispatch, getState }) => {
     const { torneioId, nomesDasSeries } = payload;
-    const state = getState() as RootState;
+    const state = getState() as RootState; // Acesso ao estado global do Redux
+
+    // --- PASSO 1: Obter os dados necessários do estado ---
     const partidasClassificatorias = state.partidas.partidas.filter(
       (p) => p.fase === "Classificatória" && p.status === "Finalizado"
     );
     const equipesDoTorneio =
       state.torneios.selectedTorneioComEquipes?.equipes || [];
+
     if (equipesDoTorneio.length === 0) {
       throw new Error("Nenhuma equipe encontrada para este torneio.");
     }
+
+    // --- PASSO 2: Agrupar as equipes pelas suas chaves ---
     const equipesPorChave: Record<string, EquipeNoTorneio[]> = {};
     equipesDoTorneio.forEach((e) => {
       if (e.chave) {
@@ -171,21 +176,26 @@ export const gerarPlayoffs = createAsyncThunk(
         equipesPorChave[e.chave].push(e);
       }
     });
+
+    // --- PASSO 3: Calcular a classificação final para CADA chave ---
     const classificacaoFinalPorChave: Record<string, any[]> = {};
-    for (const chaveNumStr in equipesPorChave) {
-      const equipesDoGrupo = equipesPorChave[chaveNumStr];
+    for (const chaveStr in equipesPorChave) {
+      const equipesDoGrupo = equipesPorChave[chaveStr];
       const partidasDoGrupo = partidasClassificatorias.filter(
-        (p) => p.chave === chaveNumStr
+        (p) => p.chave === chaveStr
       );
+
       const stats: Record<string, any> = {};
       equipesDoGrupo.forEach((equipe) => {
         stats[equipe.id] = { equipe, V: 0, Pts: 0, SP: 0, SC: 0, PP: 0, PC: 0 };
       });
+
       partidasDoGrupo.forEach((partida) => {
         const equipeA = stats[partida.equipe_a.id];
         const equipeB = stats[partida.equipe_b.id];
         const setsA = partida.pontos_equipe_a;
         const setsB = partida.pontos_equipe_b;
+
         if (equipeA) {
           equipeA.SP += setsA;
           equipeA.SC += setsB;
@@ -194,6 +204,7 @@ export const gerarPlayoffs = createAsyncThunk(
           equipeB.SP += setsB;
           equipeB.SC += setsA;
         }
+
         if (setsA > setsB) {
           if (equipeA) {
             equipeA.V++;
@@ -211,6 +222,7 @@ export const gerarPlayoffs = createAsyncThunk(
             equipeA.Pts += 1;
           }
         }
+
         partida.placar_sets.forEach((set) => {
           if (equipeA) {
             equipeA.PP += set.a;
@@ -222,53 +234,72 @@ export const gerarPlayoffs = createAsyncThunk(
           }
         });
       });
-      classificacaoFinalPorChave[chaveNumStr] = Object.values(stats).sort(
+
+      // Ordena a classificação final de cada chave
+      classificacaoFinalPorChave[chaveStr] = Object.values(stats).sort(
         (a, b) => {
-          if (b.Pts !== a.Pts) return b.Pts - a.Pts;
-          if (b.V !== a.V) return b.V - a.V;
-          const setAverageA = a.SP / (a.SC || 1);
+          if (b.Pts !== a.Pts) return b.Pts - a.Pts; // Critério 1: Pontos
+          if (b.V !== a.V) return b.V - a.V; // Critério 2: Vitórias
+          const setAverageA = a.SP / (a.SC || 1); // Critério 3: Set Average
           const setAverageB = b.SP / (b.SC || 1);
           if (setAverageB !== setAverageA) return setAverageB - setAverageA;
-          const pointAverageA = a.PP / (a.PC || 1);
+          const pointAverageA = a.PP / (a.PC || 1); // Critério 4: Point Average
           const pointAverageB = b.PP / (b.PC || 1);
           return pointAverageB - pointAverageA;
         }
       );
     }
-    const equipesPorSerie: Record<string, Equipe[]> = {};
-    nomesDasSeries.forEach((serie) => (equipesPorSerie[serie] = []));
-    for (const chaveNum in classificacaoFinalPorChave) {
-      const classificacaoDaChave = classificacaoFinalPorChave[chaveNum];
-      classificacaoDaChave.forEach((posicao, index) => {
-        if (nomesDasSeries[index]) {
-          const nomeDaSerie = nomesDasSeries[index];
-          equipesPorSerie[nomeDaSerie].push(posicao.equipe);
-        }
-      });
-    }
+
+    // --- PASSO 4: Criar o Ranking Geral dentro de cada Série e Gerar as Semifinais ---
     const partidasPlayoffParaInserir: any[] = [];
-    for (const nomeDaSerie in equipesPorSerie) {
-      const equipes = equipesPorSerie[nomeDaSerie];
-      if (equipes.length === 4) {
-        // Lógica específica para 4 equipes por série
-        const rank1 = equipes[0];
-        const rank2 = equipes[1];
-        const rank3 = equipes[2];
-        const rank4 = equipes[3];
+
+    for (let i = 0; i < nomesDasSeries.length; i++) {
+      const nomeDaSerie = nomesDasSeries[i];
+      const posicaoNaChave = i; // 0 = 1º lugar (Ouro), 1 = 2º lugar (Prata), etc.
+
+      // a. Pega todas as equipes daquela posição (ex: todos os 1ºs lugares de cada chave)
+      let equipesDaSerie: any[] = [];
+      for (const chaveNum in classificacaoFinalPorChave) {
+        if (classificacaoFinalPorChave[chaveNum][posicaoNaChave]) {
+          equipesDaSerie.push(
+            classificacaoFinalPorChave[chaveNum][posicaoNaChave]
+          );
+        }
+      }
+
+      // b. Ordena estas equipes pelo "Ponto Average" para criar o Ranking Geral
+      equipesDaSerie.sort((a, b) => {
+        const pointAverageA = a.PP / (a.PC || 1);
+        const pointAverageB = b.PP / (b.PC || 1);
+        return pointAverageB - pointAverageA;
+      });
+
+      // c. Gera os confrontos da semifinal (1º vs 4º, 2º vs 3º)
+      // Assume que teremos 4 equipes por série (ex: 4 chaves na fase classificatória)
+      if (equipesDaSerie.length === 4) {
+        const rank1 = equipesDaSerie[0].equipe;
+        const rank2 = equipesDaSerie[1].equipe;
+        const rank3 = equipesDaSerie[2].equipe;
+        const rank4 = equipesDaSerie[3].equipe;
+
         partidasPlayoffParaInserir.push({
           torneio_id: torneioId,
           fase: `${nomeDaSerie} - Semifinal`,
           equipe_a_id: rank1.id,
-          equipe_b_id: rank4.id,
+          equipe_b_id: rank4.id, // 1º Geral vs 4º Geral
         });
         partidasPlayoffParaInserir.push({
           torneio_id: torneioId,
           fase: `${nomeDaSerie} - Semifinal`,
           equipe_a_id: rank2.id,
-          equipe_b_id: rank3.id,
+          equipe_b_id: rank3.id, // 2º Geral vs 3º Geral
         });
       }
+      // Futuramente, podemos adicionar lógica para outros números de equipes se necessário
     }
+
+    // --- PASSO 5: Salvar as novas partidas no banco de dados ---
+    // Apaga playoffs antigos (se houver, para permitir re-gerar) e insere os novos
     await supabase
       .from("partidas")
       .delete()
@@ -280,6 +311,8 @@ export const gerarPlayoffs = createAsyncThunk(
         .insert(partidasPlayoffParaInserir);
       if (insertError) throw new Error(insertError.message);
     }
+
+    // Atualiza a interface com todas as partidas do torneio, incluindo as novas
     dispatch(fetchPartidasPorTorneio(torneioId));
   }
 );

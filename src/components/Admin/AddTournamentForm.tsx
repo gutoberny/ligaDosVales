@@ -11,7 +11,6 @@ const AddTournamentForm = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // A data é gerada automaticamente no formato YYYY-MM-DD
     const data_inicio = new Date().toISOString().split("T")[0];
     dispatch(createTorneio({ nome, temporada, data_inicio }));
     setNome("");
@@ -19,7 +18,12 @@ const AddTournamentForm = () => {
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ mb: 2 }}>
-      <Stack direction="row" spacing={2} alignItems="center">
+      {/* --- ALTERAÇÃO AQUI --- */}
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={2}
+        alignItems="center"
+      >
         <TextField
           label="Nome do Novo Torneio"
           value={nome}
@@ -33,9 +37,13 @@ const AddTournamentForm = () => {
           value={temporada}
           onChange={(e) => setTemporada(Number(e.target.value))}
           required
-          sx={{ width: 150 }}
+          sx={{ width: { xs: "100%", md: 150 } }}
         />
-        <Button type="submit" variant="contained">
+        <Button
+          type="submit"
+          variant="contained"
+          sx={{ width: { xs: "100%", md: "auto" } }}
+        >
           Adicionar
         </Button>
       </Stack>
