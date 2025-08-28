@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, Link as RouterLink } from "react-router-dom"; // Adicionado Link as RouterLink
 import {
   Box,
   Drawer,
@@ -16,12 +16,10 @@ import HomeIcon from "@mui/icons-material/Home";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LogoutIcon from "@mui/icons-material/Logout";
-import { RootState } from "../../store/store"; // Apenas para tipagem
+import { RootState } from "../../store/store";
 
-// Definimos o tipo do utilizador para maior segurança
+// Tipagem para as props que o componente recebe do Layout
 type User = RootState["auth"]["user"];
-
-// Definimos as "props" que o nosso componente Sidebar espera receber do Layout
 interface SidebarProps {
   drawerWidth: number;
   mobileOpen: boolean;
@@ -30,7 +28,7 @@ interface SidebarProps {
   handleLogout: () => void;
 }
 
-// Criamos um sub-componente com o conteúdo do menu para não repetir código
+// Sub-componente com o conteúdo do menu para evitar repetição de código
 const SidebarContent = ({
   user,
   handleLogout,
@@ -48,15 +46,16 @@ const SidebarContent = ({
 
   return (
     <div>
-      <Toolbar>
-        <Typography
-          variant="h6"
-          noWrap
-          component="div"
-          sx={{ color: "secondary.main", fontWeight: "bold" }}
-        >
-          LIGA DOS VALES
-        </Typography>
+      <Toolbar
+        sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}
+      >
+        <RouterLink to="/">
+          <img
+            src="/img/logo_wilsons.png"
+            alt="Logo da Liga dos Vales de Voleibol"
+            style={{ height: 80, display: "flex", alignItems: "center" }}
+          />
+        </RouterLink>
       </Toolbar>
       <Divider sx={{ borderColor: "rgba(255, 255, 255, 0.2)" }} />
       <List>
@@ -129,6 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
       aria-label="menu de navegação principal"
     >
+      {/* Sidebar para a versão móvel */}
       <Drawer
         variant="temporary"
         open={mobileOpen}
@@ -147,6 +147,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <SidebarContent user={user} handleLogout={handleLogout} />
       </Drawer>
 
+      {/* Sidebar para a versão desktop */}
       <Drawer
         variant="permanent"
         sx={{

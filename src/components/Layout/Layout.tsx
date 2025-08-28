@@ -57,7 +57,12 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
 
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+          <Typography
+            variant="h6"
+            noWrap
+            component="div"
+            sx={{ flexGrow: 1, containerAlign: "center", textAlign: "center" }}
+          >
             Liga dos Vales de Voleibol
           </Typography>
 
