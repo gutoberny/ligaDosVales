@@ -1,16 +1,18 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { supabase } from "../../../lib/supabaseClient";
-import { Equipe } from "../equipes/equipesSlice";
+import { EquipeNoTorneio } from "../torneios/torneiosSlice";
 import { RootState } from "../../store";
+import { Equipe } from "../equipes/equipesSlice";
 
 // ========================================================================
 // 1. TIPOS
 // ========================================================================
+
 export interface Partida {
   id: string;
   torneio_id: string;
   data_hora_jogo: string | null;
-  chave: number | null;
+  chave: string | null;
   quadra: number | null;
   ordem: number | null;
   status: string;
@@ -34,6 +36,7 @@ const initialState: PartidasState = {
   error: null,
 };
 
+// Payloads para os Thunks
 interface UpdatePartidaPayload {
   partidaId: string;
   ordem?: number | null;
@@ -52,7 +55,7 @@ interface GerarPlayoffsPayload {
 
 interface GerarFinaisPayload {
   torneioId: string;
-  nomeDaSerie: string; // Ex: 'Ouro', 'Prata'
+  nomeDaSerie: string;
 }
 
 // ========================================================================
@@ -70,40 +73,33 @@ export const fetchPartidasPorTorneio = createAsyncThunk(
       .order("quadra", { ascending: true })
       .order("ordem", { ascending: true });
     if (error) throw new Error(error.message);
-    return data as any[];
+    return data as Partida[];
   }
 );
 
 export const gerarPartidasDoTorneio = createAsyncThunk(
   "partidas/gerarPartidasDoTorneio",
-  async (torneioId: string, { dispatch }) => {
-    // Lógica completa para gerar confrontos da fase classificatória
-    const { data: equipesPorChave, error: fetchError } = await supabase
-      .from("torneios_equipes")
-      .select("chave, equipes(*)")
-      .eq("torneio_id", torneioId)
-      .not("chave", "is", null);
+  async (torneioId: string, { dispatch, getState }) => {
+    const state = getState() as RootState;
+    const equipesDoTorneio =
+      state.torneios.selectedTorneioComEquipes?.equipes || [];
 
-    if (fetchError) throw new Error(fetchError.message);
-
-    const chaves: Record<number, Equipe[]> = equipesPorChave.reduce(
-      (acc: Record<number, Equipe[]>, item: any) => {
-        const chaveNum = item.chave;
-        if (!acc[chaveNum]) acc[chaveNum] = [];
-        acc[chaveNum].push(item.equipes);
-        return acc;
-      },
-      {} as Record<number, Equipe[]>
-    );
+    const equipesPorChave: Record<string, EquipeNoTorneio[]> = {};
+    equipesDoTorneio.forEach((e) => {
+      if (e.chave) {
+        if (!equipesPorChave[e.chave]) equipesPorChave[e.chave] = [];
+        equipesPorChave[e.chave].push(e);
+      }
+    });
 
     const partidasParaInserir: any[] = [];
-    for (const chaveNum in chaves) {
-      const equipes = chaves[chaveNum];
+    for (const chave in equipesPorChave) {
+      const equipes = equipesPorChave[chave];
       for (let i = 0; i < equipes.length; i++) {
         for (let j = i + 1; j < equipes.length; j++) {
           partidasParaInserir.push({
             torneio_id: torneioId,
-            chave: Number(chaveNum),
+            chave: chave,
             equipe_a_id: equipes[i].id,
             equipe_b_id: equipes[j].id,
             fase: "Classificatória",
@@ -117,10 +113,12 @@ export const gerarPartidasDoTorneio = createAsyncThunk(
       .delete()
       .eq("torneio_id", torneioId)
       .eq("fase", "Classificatória");
-    const { error: insertError } = await supabase
-      .from("partidas")
-      .insert(partidasParaInserir);
-    if (insertError) throw new Error(insertError.message);
+    if (partidasParaInserir.length > 0) {
+      const { error: insertError } = await supabase
+        .from("partidas")
+        .insert(partidasParaInserir);
+      if (insertError) throw new Error(insertError.message);
+    }
 
     dispatch(fetchPartidasPorTorneio(torneioId));
   }
@@ -137,7 +135,7 @@ export const updatePartida = createAsyncThunk(
       .select("*, equipe_a:equipe_a_id(*), equipe_b:equipe_b_id(*)")
       .single();
     if (error) throw new Error(error.message);
-    return data as any;
+    return data as Partida;
   }
 );
 
@@ -158,30 +156,27 @@ export const gerarPlayoffs = createAsyncThunk(
   async (payload: GerarPlayoffsPayload, { dispatch, getState }) => {
     const { torneioId, nomesDasSeries } = payload;
     const state = getState() as RootState;
-
-    // --- PASSO A: CALCULAR CLASSIFICAÇÃO COMPLETA DA FASE DE GRUPOS ---
     const partidasClassificatorias = state.partidas.partidas.filter(
       (p) => p.fase === "Classificatória" && p.status === "Finalizado"
     );
     const equipesDoTorneio =
       state.torneios.selectedTorneioComEquipes?.equipes || [];
-
-    const equipesPorChave: Record<number, Equipe[]> = {};
+    if (equipesDoTorneio.length === 0) {
+      throw new Error("Nenhuma equipe encontrada para este torneio.");
+    }
+    const equipesPorChave: Record<string, EquipeNoTorneio[]> = {};
     equipesDoTorneio.forEach((e) => {
       if (e.chave) {
         if (!equipesPorChave[e.chave]) equipesPorChave[e.chave] = [];
         equipesPorChave[e.chave].push(e);
       }
     });
-
-    const classificacaoFinalPorChave: Record<number, any[]> = {};
+    const classificacaoFinalPorChave: Record<string, any[]> = {};
     for (const chaveNumStr in equipesPorChave) {
-      const chaveNum = Number(chaveNumStr);
-      const equipesDoGrupo = equipesPorChave[chaveNum];
+      const equipesDoGrupo = equipesPorChave[chaveNumStr];
       const partidasDoGrupo = partidasClassificatorias.filter(
-        (p) => p.chave === chaveNum
+        (p) => p.chave === chaveNumStr
       );
-
       const stats: Record<string, any> = {};
       equipesDoGrupo.forEach((equipe) => {
         stats[equipe.id] = { equipe, V: 0, Pts: 0, SP: 0, SC: 0, PP: 0, PC: 0 };
@@ -191,7 +186,6 @@ export const gerarPlayoffs = createAsyncThunk(
         const equipeB = stats[partida.equipe_b.id];
         const setsA = partida.pontos_equipe_a;
         const setsB = partida.pontos_equipe_b;
-
         if (equipeA) {
           equipeA.SP += setsA;
           equipeA.SC += setsB;
@@ -200,7 +194,6 @@ export const gerarPlayoffs = createAsyncThunk(
           equipeB.SP += setsB;
           equipeB.SC += setsA;
         }
-        // Lógica de pontos
         if (setsA > setsB) {
           if (equipeA) {
             equipeA.V++;
@@ -218,7 +211,6 @@ export const gerarPlayoffs = createAsyncThunk(
             equipeA.Pts += 1;
           }
         }
-        // Soma dos pontos de todos os sets para o Point Average
         partida.placar_sets.forEach((set) => {
           if (equipeA) {
             equipeA.PP += set.a;
@@ -230,8 +222,7 @@ export const gerarPlayoffs = createAsyncThunk(
           }
         });
       });
-
-      classificacaoFinalPorChave[chaveNum] = Object.values(stats).sort(
+      classificacaoFinalPorChave[chaveNumStr] = Object.values(stats).sort(
         (a, b) => {
           if (b.Pts !== a.Pts) return b.Pts - a.Pts;
           if (b.V !== a.V) return b.V - a.V;
@@ -244,48 +235,32 @@ export const gerarPlayoffs = createAsyncThunk(
         }
       );
     }
-
-    // --- PASSO B: CRIAR O RANKING GERAL E GERAR SEMIFINAIS ---
-    const partidasPlayoffParaInserir: any[] = [];
-
-    // Para cada série (Ouro, Prata...)
-    for (let i = 0; i < nomesDasSeries.length; i++) {
-      const nomeDaSerie = nomesDasSeries[i];
-      const posicaoNaChave = i; // 0 = 1º lugar, 1 = 2º lugar...
-
-      // 1. Pega todas as equipes daquela posição (ex: todos os 1ºs lugares)
-      let equipesDaSerie: any[] = [];
-      for (const chaveNum in classificacaoFinalPorChave) {
-        if (classificacaoFinalPorChave[chaveNum][posicaoNaChave]) {
-          equipesDaSerie.push(
-            classificacaoFinalPorChave[chaveNum][posicaoNaChave]
-          );
+    const equipesPorSerie: Record<string, Equipe[]> = {};
+    nomesDasSeries.forEach((serie) => (equipesPorSerie[serie] = []));
+    for (const chaveNum in classificacaoFinalPorChave) {
+      const classificacaoDaChave = classificacaoFinalPorChave[chaveNum];
+      classificacaoDaChave.forEach((posicao, index) => {
+        if (nomesDasSeries[index]) {
+          const nomeDaSerie = nomesDasSeries[index];
+          equipesPorSerie[nomeDaSerie].push(posicao.equipe);
         }
-      }
-
-      // 2. Ordena estas equipes pelo "Ponto Average" para criar o Ranking Geral
-      equipesDaSerie.sort((a, b) => {
-        const pointAverageA = a.PP / (a.PC || 1);
-        const pointAverageB = b.PP / (b.PC || 1);
-        return pointAverageB - pointAverageA;
       });
-
-      // 3. Gera os confrontos da semifinal (1º vs 4º, 2º vs 3º)
-      // Isto assume que teremos 4 equipes por série (ex: 4 chaves de classificação)
-      if (equipesDaSerie.length === 4) {
-        const rank1 = equipesDaSerie[0].equipe;
-        const rank2 = equipesDaSerie[1].equipe;
-        const rank3 = equipesDaSerie[2].equipe;
-        const rank4 = equipesDaSerie[3].equipe;
-
-        // Semifinal 1: 1º Geral vs 4º Geral
+    }
+    const partidasPlayoffParaInserir: any[] = [];
+    for (const nomeDaSerie in equipesPorSerie) {
+      const equipes = equipesPorSerie[nomeDaSerie];
+      if (equipes.length === 4) {
+        // Lógica específica para 4 equipes por série
+        const rank1 = equipes[0];
+        const rank2 = equipes[1];
+        const rank3 = equipes[2];
+        const rank4 = equipes[3];
         partidasPlayoffParaInserir.push({
           torneio_id: torneioId,
           fase: `${nomeDaSerie} - Semifinal`,
           equipe_a_id: rank1.id,
           equipe_b_id: rank4.id,
         });
-        // Semifinal 2: 2º Geral vs 3º Geral
         partidasPlayoffParaInserir.push({
           torneio_id: torneioId,
           fase: `${nomeDaSerie} - Semifinal`,
@@ -293,11 +268,7 @@ export const gerarPlayoffs = createAsyncThunk(
           equipe_b_id: rank3.id,
         });
       }
-      // Adicionar lógica para outros números de equipes se necessário
     }
-
-    // --- PASSO C: SALVAR NO BANCO DE DADOS ---
-    // Apaga playoffs antigos (se houver) e insere os novos
     await supabase
       .from("partidas")
       .delete()
@@ -309,7 +280,6 @@ export const gerarPlayoffs = createAsyncThunk(
         .insert(partidasPlayoffParaInserir);
       if (insertError) throw new Error(insertError.message);
     }
-
     dispatch(fetchPartidasPorTorneio(torneioId));
   }
 );
@@ -320,7 +290,6 @@ export const gerarFinais = createAsyncThunk(
     const { torneioId, nomeDaSerie } = payload;
     const faseSemifinal = `${nomeDaSerie} - Semifinal`;
 
-    // 1. Buscar as semifinais finalizadas da série
     const { data: semifinais, error: fetchError } = await supabase
       .from("partidas")
       .select("*, equipe_a:equipe_a_id(*), equipe_b:equipe_b_id(*)")
@@ -335,10 +304,8 @@ export const gerarFinais = createAsyncThunk(
       );
     }
 
-    // 2. Identificar os vencedores e perdedores
     const vencedores: Equipe[] = [];
     const perdedores: Equipe[] = [];
-
     semifinais.forEach((partida) => {
       if (partida.pontos_equipe_a > partida.pontos_equipe_b) {
         vencedores.push(partida.equipe_a);
@@ -349,16 +316,13 @@ export const gerarFinais = createAsyncThunk(
       }
     });
 
-    // 3. Preparar as novas partidas
     const partidasFinaisParaInserir = [
-      // A Final
       {
         torneio_id: torneioId,
         fase: `${nomeDaSerie} - Final`,
         equipe_a_id: vencedores[0].id,
         equipe_b_id: vencedores[1].id,
       },
-      // A Disputa de 3º Lugar
       {
         torneio_id: torneioId,
         fase: `${nomeDaSerie} - Disputa 3º Lugar`,
@@ -367,7 +331,6 @@ export const gerarFinais = createAsyncThunk(
       },
     ];
 
-    // 4. Apagar jogos antigos (caso esteja a gerar novamente) e inserir os novos
     const fasesParaApagar = [
       `${nomeDaSerie} - Final`,
       `${nomeDaSerie} - Disputa 3º Lugar`,
@@ -383,7 +346,6 @@ export const gerarFinais = createAsyncThunk(
       .insert(partidasFinaisParaInserir);
     if (insertError) throw new Error(insertError.message);
 
-    // 5. Atualizar a interface
     dispatch(fetchPartidasPorTorneio(torneioId));
   }
 );
