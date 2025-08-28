@@ -116,7 +116,6 @@ export const gerarChaves = createAsyncThunk(
       [equipeIds[i], equipeIds[j]] = [equipeIds[j], equipeIds[i]];
     }
 
-    // --- LÓGICA ATUALIZADA AQUI ---
     // 1. Criamos um array com as letras do alfabeto para usar como nome das chaves
     const letrasChaves = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
