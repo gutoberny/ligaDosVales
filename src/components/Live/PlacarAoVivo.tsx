@@ -28,7 +28,6 @@ interface Props {
 const PlacarAoVivo: React.FC<Props> = ({ partida }) => {
   const dispatch = useDispatch<AppDispatch>();
 
-  // O código dos hooks e das funções handle continua exatamente igual
   const [sets, setSets] = useState(partida.placar_sets || []);
   const [pontosA, setPontosA] = useState(0);
   const [pontosB, setPontosB] = useState(0);
@@ -50,13 +49,72 @@ const PlacarAoVivo: React.FC<Props> = ({ partida }) => {
   }, [partida]);
 
   const handleSalvarPlacar = (finalizarPartida = false) => {
-    /* ... (código existente) ... */
+    if ((pontosA > 0 || pontosB > 0) && !finalizarPartida) {
+      if (Math.abs(pontosA - pontosB) < 2) {
+        alert(
+          "Placar inválido! O set deve ser vencido por uma diferença de no mínimo 2 pontos."
+        );
+        return;
+      }
+    }
+    const novosSets =
+      pontosA > 0 || pontosB > 0 ? [...sets, { a: pontosA, b: pontosB }] : sets;
+    let novosSetsVencidosA = 0;
+    let novosSetsVencidosB = 0;
+    novosSets.forEach((set) => {
+      if (set.a > set.b) novosSetsVencidosA++;
+      else novosSetsVencidosB++;
+    });
+
+    setSets(novosSets);
+    setSetsVencidosA(novosSetsVencidosA);
+    setSetsVencidosB(novosSetsVencidosB);
+
+    if (finalizarPartida) {
+      setIsLocallyFinalizada(true);
+    }
+
+    dispatch(
+      updatePartida({
+        partidaId: partida.id,
+        placar_sets: novosSets,
+        pontos_equipe_a: novosSetsVencidosA,
+        pontos_equipe_b: novosSetsVencidosB,
+        status: finalizarPartida ? "Finalizado" : "Em Andamento",
+      })
+    );
+
+    setPontosA(0);
+    setPontosB(0);
   };
+
   const handleReabrirPartida = () => {
-    /* ... (código existente) ... */
+    if (
+      window.confirm(
+        "Tem a certeza que deseja reabrir esta partida para edição?"
+      )
+    ) {
+      setIsLocallyFinalizada(false);
+      dispatch(
+        updatePartida({
+          partidaId: partida.id,
+          status: "Em Andamento",
+        })
+      );
+    }
   };
+
   const handleCorrigirUltimoSet = () => {
-    /* ... (código existente) ... */
+    if (sets.length === 0) {
+      alert("Não há sets para corrigir.");
+      return;
+    }
+    const ultimoSet = sets[sets.length - 1];
+    const setsAnteriores = sets.slice(0, -1);
+
+    setPontosA(ultimoSet.a);
+    setPontosB(ultimoSet.b);
+    setSets(setsAnteriores);
   };
 
   return (
@@ -79,9 +137,7 @@ const PlacarAoVivo: React.FC<Props> = ({ partida }) => {
 
         {!isLocallyFinalizada ? (
           <>
-            {/* --- BLOCO DO PLACAR DE EDIÇÃO (MOVIDO PARA CIMA) --- */}
             <Grid container spacing={2} textAlign="center">
-              {/* Placar Equipe A */}
               <Grid item xs={6}>
                 <Typography variant="h6">
                   {partida.equipe_a.nome} ({setsVencidosA} sets)
@@ -104,7 +160,6 @@ const PlacarAoVivo: React.FC<Props> = ({ partida }) => {
                   <RemoveCircleOutlineIcon fontSize="large" />
                 </IconButton>
               </Grid>
-              {/* Placar Equipe B */}
               <Grid item xs={6}>
                 <Typography variant="h6">
                   {partida.equipe_b.nome} ({setsVencidosB} sets)
@@ -131,7 +186,6 @@ const PlacarAoVivo: React.FC<Props> = ({ partida }) => {
 
             <Divider sx={{ my: 2 }} />
 
-            {/* Placar de Sets (agora fica em baixo) */}
             <Box sx={{ textAlign: "center", my: 2 }}>
               <Typography variant="h5" component="div">
                 Sets: {setsVencidosA} - {setsVencidosB}
@@ -172,7 +226,6 @@ const PlacarAoVivo: React.FC<Props> = ({ partida }) => {
           </>
         ) : (
           <Box sx={{ mt: 2, textAlign: "center" }}>
-            {/* Visualização da partida finalizada (com o placar de sets em destaque) */}
             <Typography variant="h4">Placar Final</Typography>
             <Typography variant="h2" sx={{ my: 2 }}>
               {setsVencidosA} - {setsVencidosB}
