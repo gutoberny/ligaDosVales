@@ -27,7 +27,6 @@ const Layout = () => {
             />
           </RouterLink>
 
-          {/* --- CORREÇÃO APLICADA AQUI --- */}
           <Typography
             variant="h6"
             noWrap
