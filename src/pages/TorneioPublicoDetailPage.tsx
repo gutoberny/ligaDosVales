@@ -7,6 +7,7 @@ import {
   fetchPartidasPorTorneio,
   Partida,
   Equipe,
+  EquipeNoTorneio, // Certifique-se que este tipo é exportado do seu torneiosSlice
 } from "../store/slices";
 
 // Importando componentes do MUI
@@ -19,12 +20,9 @@ import {
   Grid,
   CircularProgress,
 } from "@mui/material";
-
-// Importando os componentes PÚBLICOS que esta página utiliza
 import ClassificacaoGrupo from "../components/Public/ClassificacaoGrupo";
 import PartidasGrupoList from "../components/Public/PartidasGrupoList";
 
-// Definindo o tipo da estrutura que vamos usar para organizar os dados
 type DadosDoGrupo = {
   equipes: Equipe[];
   partidas: Partida[];
@@ -35,58 +33,66 @@ const TorneioPublicoDetailPage = () => {
   const dispatch = useDispatch<AppDispatch>();
   const [abaSelecionada, setAbaSelecionada] = useState(0);
 
-  // Seleciona os dados necessários do Redux
   const { selectedTorneioComEquipes: torneio, status: torneioStatus } =
     useSelector((state: RootState) => state.torneios);
   const { partidas, status: partidasStatus } = useSelector(
     (state: RootState) => state.partidas
   );
 
-  // Efeito para buscar os dados quando a página carrega
   useEffect(() => {
     if (torneioId) {
-      // Disparamos ambas as buscas para ter todos os dados necessários
       dispatch(fetchTorneioComEquipes(torneioId));
       dispatch(fetchPartidasPorTorneio(torneioId));
     }
   }, [torneioId, dispatch]);
 
-  // Lógica para agrupar todas as partidas e equipes por fase e por grupo
+  // --- LÓGICA DE AGRUPAMENTO TOTALMENTE REFEITA ---
   const dadosPorFase = useMemo(() => {
     if (!torneio || !partidas) return {};
 
-    // 1. Agrupa todas as partidas pela sua fase (Classificatória, Ouro - Semifinal, etc.)
-    const partidasAgrupadasPorFase = partidas.reduce((acc, partida) => {
+    const resultadoFinal: Record<string, Record<string, DadosDoGrupo>> = {};
+
+    // 1. Agrupar equipes por fase e por chave (para a fase Classificatória)
+    const equipesPorFaseEChave: Record<string, Record<string, Equipe[]>> = {};
+    torneio.equipes.forEach((equipe: EquipeNoTorneio) => {
+      const fase = "Classificatória"; // Por enquanto, equipes só pertencem à fase classificatória
+      const chave = equipe.chave || "Sem Chave";
+      if (!equipesPorFaseEChave[fase]) equipesPorFaseEChave[fase] = {};
+      if (!equipesPorFaseEChave[fase][chave])
+        equipesPorFaseEChave[fase][chave] = [];
+      equipesPorFaseEChave[fase][chave].push(equipe);
+    });
+
+    // 2. Agrupar partidas por fase
+    const partidasPorFase = partidas.reduce((acc, partida) => {
       const fase = partida.fase || "Classificatória";
       if (!acc[fase]) acc[fase] = [];
       acc[fase].push(partida);
       return acc;
     }, {} as Record<string, Partida[]>);
 
-    const resultadoFinal: Record<string, Record<string, DadosDoGrupo>> = {};
+    // 3. Montar a estrutura final
+    const fases = new Set([
+      ...Object.keys(equipesPorFaseEChave),
+      ...Object.keys(partidasPorFase),
+    ]);
 
-    // 2. Itera sobre cada fase para organizar os grupos internos
-    for (const fase in partidasAgrupadasPorFase) {
+    fases.forEach((fase) => {
       resultadoFinal[fase] = {};
-      const partidasDaFase = partidasAgrupadasPorFase[fase];
-
       if (fase === "Classificatória") {
-        // Para a fase classificatória, os grupos são as chaves
-        partidasDaFase.forEach((partida) => {
-          const chaveNum = String(partida.chave || 0);
-          if (!resultadoFinal[fase][chaveNum]) {
-            const equipesDaChave = torneio.equipes.filter(
-              (e) => e.chave === Number(chaveNum)
-            );
-            resultadoFinal[fase][chaveNum] = {
-              equipes: equipesDaChave,
-              partidas: [],
-            };
-          }
-          resultadoFinal[fase][chaveNum].partidas.push(partida);
-        });
+        const chavesDaFase = equipesPorFaseEChave[fase] || {};
+        for (const chave in chavesDaFase) {
+          const partidasDaChave = partidas.filter(
+            (p) => p.fase === fase && String(p.chave) === chave
+          );
+          resultadoFinal[fase][chave] = {
+            equipes: chavesDaFase[chave],
+            partidas: partidasDaChave,
+          };
+        }
       } else {
-        // Para os playoffs, a própria fase é o grupo
+        // Lógica para Playoffs
+        const partidasDaFase = partidasPorFase[fase] || [];
         const equipesDaFase = new Map<string, Equipe>();
         partidasDaFase.forEach((p) => {
           if (p.equipe_a) equipesDaFase.set(p.equipe_a.id, p.equipe_a);
@@ -97,7 +103,8 @@ const TorneioPublicoDetailPage = () => {
           partidas: partidasDaFase,
         };
       }
-    }
+    });
+
     return resultadoFinal;
   }, [torneio, partidas]);
 
@@ -169,36 +176,32 @@ const TorneioPublicoDetailPage = () => {
         </Tabs>
       </Box>
 
-      {Object.keys(gruposDaFase).length > 0 ? (
-        Object.entries(gruposDaFase).map(([nomeDoGrupo, dados]) => (
-          <Box key={nomeDoGrupo} sx={{ mb: 5 }}>
-            <Typography variant="h4" component="h3" gutterBottom>
-              {faseAtual === "Classificatória"
-                ? `Chave ${nomeDoGrupo}`
-                : nomeDoGrupo}
-            </Typography>
-            <Grid container spacing={4}>
-              <Grid item xs={12} lg={7}>
-                <Typography variant="h6" gutterBottom>
-                  Classificação
-                </Typography>
-                <ClassificacaoGrupo
-                  equipesDoGrupo={dados.equipes}
-                  partidasDoGrupo={dados.partidas}
-                />
-              </Grid>
-              <Grid item xs={12} lg={5}>
-                <Typography variant="h6" gutterBottom>
-                  Partidas
-                </Typography>
-                <PartidasGrupoList partidas={dados.partidas} />
-              </Grid>
+      {Object.entries(gruposDaFase).map(([nomeDoGrupo, dados]) => (
+        <Box key={nomeDoGrupo} sx={{ mb: 5 }}>
+          <Typography variant="h4" component="h3" gutterBottom>
+            {faseAtual === "Classificatória"
+              ? `Chave ${nomeDoGrupo}`
+              : nomeDoGrupo}
+          </Typography>
+          <Grid container spacing={4}>
+            <Grid item xs={12} lg={7}>
+              <Typography variant="h6" gutterBottom>
+                Classificação
+              </Typography>
+              <ClassificacaoGrupo
+                equipesDoGrupo={dados.equipes}
+                partidasDoGrupo={dados.partidas}
+              />
             </Grid>
-          </Box>
-        ))
-      ) : (
-        <Typography>Nenhuma partida encontrada para esta fase.</Typography>
-      )}
+            <Grid item xs={12} lg={5}>
+              <Typography variant="h6" gutterBottom>
+                Partidas
+              </Typography>
+              <PartidasGrupoList partidas={dados.partidas} />
+            </Grid>
+          </Grid>
+        </Box>
+      ))}
     </Container>
   );
 };
