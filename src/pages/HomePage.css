@@ -1,0 +1,70 @@
+/* Define a largura do nosso sidebar para ser usada em outros cálculos */
+:root {
+  --sidebar-width: 240px;
+}
+
+.app-layout {
+  display: flex;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  height: 100vh; /* Ocupa a altura inteira da tela */
+  position: fixed; /* Fica fixo enquanto rolamos a página */
+  top: 0;
+  left: 0;
+  background-color: #1a1a1a; /* Preto/Cinza escuro */
+  padding-top: 20px;
+  color: white;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.sidebar-header {
+  text-align: center;
+  padding: 0 1rem 1rem 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #444;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  color: #ffd700; /* Dourado */
+  font-size: 1.5rem;
+}
+
+.sidebar-nav {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav li a {
+  display: block;
+  padding: 15px 20px;
+  color: #f1f1f1; /* Branco suave */
+  text-decoration: none;
+  font-size: 1.1rem;
+  transition: background-color 0.3s, border-left 0.3s;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-nav li a:hover {
+  background-color: #333;
+}
+
+/* O NavLink adiciona a classe 'active' ao link da página atual */
+.sidebar-nav li a.active {
+  background-color: #dc3545; /* Vermelho */
+  color: white;
+  font-weight: bold;
+  border-left: 3px solid #ffd700; /* Dourado */
+}
+
+/* Área de conteúdo principal */
+.main-content {
+  /* Empurra o conteúdo para a direita para não ficar debaixo do sidebar */
+  margin-left: var(--sidebar-width);
+  padding: 2rem;
+  width: calc(100% - var(--sidebar-width));
+  background-color: #ffffff; /* Fundo branco para o conteúdo */
+}
