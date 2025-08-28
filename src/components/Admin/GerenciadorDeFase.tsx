@@ -4,8 +4,9 @@ import { AppDispatch } from "../../store/store";
 import { Partida, updatePartida } from "../../store/slices";
 import PartidaNaoAgendadaItem from "./PartidaNaoAgendadaItem";
 import {
-  Box,
+  Grid,
   Typography,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -14,8 +15,6 @@ import {
   TableRow,
   Paper,
   Button,
-  Grid, // <-- 1. IMPORT FALTANTE ADICIONADO
-  Stack, // <-- 1. IMPORT FALTANTE ADICIONADO
 } from "@mui/material";
 
 interface Props {
@@ -25,7 +24,8 @@ interface Props {
 const GerenciadorDeFase: React.FC<Props> = ({ partidas }) => {
   const dispatch = useDispatch<AppDispatch>();
 
-  const { partidasAgendadas, partidasNaoAgendadas } = useMemo(() => {
+  // 1. Guardamos o resultado do useMemo numa única constante.
+  const memorizedData = useMemo(() => {
     const agendadas = partidas
       .filter((p) => p.ordem !== null)
       .sort((a, b) => {
@@ -35,6 +35,9 @@ const GerenciadorDeFase: React.FC<Props> = ({ partidas }) => {
     const naoAgendadas = partidas.filter((p) => p.ordem === null);
     return { partidasAgendadas: agendadas, partidasNaoAgendadas: naoAgendadas };
   }, [partidas]);
+
+  // 2. Agora, desestruturamos a partir da constante já calculada.
+  const { partidasAgendadas, partidasNaoAgendadas } = memorizedData;
 
   const handleDesagendar = (partida: Partida) => {
     if (window.confirm("Tem a certeza que deseja desagendar esta partida?")) {
@@ -51,7 +54,7 @@ const GerenciadorDeFase: React.FC<Props> = ({ partidas }) => {
 
   return (
     <Grid container spacing={4}>
-      <Grid item xs={12} md={6}>
+      <Grid item xs={12} lg={6}>
         <Typography variant="h6" gutterBottom>
           Partidas a Agendar ({partidasNaoAgendadas.length})
         </Typography>
@@ -59,9 +62,14 @@ const GerenciadorDeFase: React.FC<Props> = ({ partidas }) => {
           {partidasNaoAgendadas.map((partida) => (
             <PartidaNaoAgendadaItem key={partida.id} partida={partida} />
           ))}
+          {partidasNaoAgendadas.length === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Todas as partidas desta fase já foram agendadas.
+            </Typography>
+          )}
         </Stack>
       </Grid>
-      <Grid item xs={12} md={6}>
+      <Grid item xs={12} lg={6}>
         <Typography variant="h6" gutterBottom>
           Partidas Agendadas ({partidasAgendadas.length})
         </Typography>
@@ -72,25 +80,36 @@ const GerenciadorDeFase: React.FC<Props> = ({ partidas }) => {
                 <TableCell>Ordem</TableCell>
                 <TableCell>Quadra</TableCell>
                 <TableCell>Confronto</TableCell>
+                <TableCell>Horário</TableCell>
                 <TableCell>Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {/* --- 2. TIPO EXPLÍCITO ADICIONADO A 'p' --- */}
-              {partidasAgendadas.map((p: Partida) => (
-                <TableRow key={p.id}>
-                  <TableCell>{p.ordem}</TableCell>
-                  <TableCell>{p.quadra}</TableCell>
-                  <TableCell>
-                    {p.equipe_a.nome} vs {p.equipe_b.nome}
-                  </TableCell>
-                  <TableCell>
-                    <Button size="small" onClick={() => handleDesagendar(p)}>
-                      Desagendar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {partidasAgendadas.map(
+                (
+                  p: Partida // Adicionar o tipo aqui também é uma boa prática
+                ) => (
+                  <TableRow key={p.id}>
+                    <TableCell>{p.ordem}</TableCell>
+                    <TableCell>{p.quadra}</TableCell>
+                    <TableCell>
+                      {p.equipe_a.nome} vs {p.equipe_b.nome}
+                    </TableCell>
+                    <TableCell>
+                      {p.data_hora_jogo
+                        ? new Date(p.data_hora_jogo).toLocaleString("pt-BR", {
+                            timeZone: "America/Sao_Paulo",
+                          })
+                        : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Button size="small" onClick={() => handleDesagendar(p)}>
+                        Desagendar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
             </TableBody>
           </Table>
         </TableContainer>

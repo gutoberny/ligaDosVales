@@ -1,10 +1,5 @@
 import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
-import { AppDispatch, RootState } from "../../store/store";
-import { logout } from "../../store/slices";
-import { supabase } from "../../lib/supabaseClient";
-
+import { NavLink } from "react-router-dom";
 import {
   Box,
   Drawer,
@@ -21,49 +16,38 @@ import HomeIcon from "@mui/icons-material/Home";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LogoutIcon from "@mui/icons-material/Logout";
+import { RootState } from "../../store/store"; // Apenas para tipagem
 
-const drawerWidth = 240;
+// Definimos o tipo do utilizador para maior segurança
+type User = RootState["auth"]["user"];
 
-const Sidebar = () => {
-  const dispatch = useDispatch<AppDispatch>();
-  const navigate = useNavigate();
+// Definimos as "props" que o nosso componente Sidebar espera receber do Layout
+interface SidebarProps {
+  drawerWidth: number;
+  mobileOpen: boolean;
+  handleDrawerToggle: () => void;
+  user: User;
+  handleLogout: () => void;
+}
 
-  // 1. Lemos o estado do utilizador a partir do Redux
-  const { user } = useSelector((state: RootState) => state.auth);
-
+// Criamos um sub-componente com o conteúdo do menu para não repetir código
+const SidebarContent = ({
+  user,
+  handleLogout,
+}: {
+  user: User;
+  handleLogout: () => void;
+}) => {
   const navItemsPublicos = [
     { text: "Página Inicial", icon: <HomeIcon />, path: "/" },
-    { text: "Etapas", icon: <EmojiEventsIcon />, path: "/torneios" },
+    { text: "Torneios", icon: <EmojiEventsIcon />, path: "/torneios" },
   ];
-
   const navItemsAdmin = [
     { text: "Painel Admin", icon: <AdminPanelSettingsIcon />, path: "/admin" },
   ];
 
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("Erro ao fazer logout:", error);
-      return;
-    }
-    dispatch(logout());
-    navigate("/login");
-  };
-
   return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        "& .MuiDrawer-paper": {
-          width: drawerWidth,
-          boxSizing: "border-box",
-          backgroundColor: "sidebar.main",
-          color: "sidebar.contrastText",
-        },
-      }}
-    >
+    <div>
       <Toolbar>
         <Typography
           variant="h6"
@@ -76,12 +60,18 @@ const Sidebar = () => {
       </Toolbar>
       <Divider sx={{ borderColor: "rgba(255, 255, 255, 0.2)" }} />
       <List>
-        {/* Renderiza sempre os itens públicos */}
         {navItemsPublicos.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
               component={NavLink}
-              to={item.path} /* ... (sx props) */
+              to={item.path}
+              sx={(theme) => ({
+                "&.active": {
+                  backgroundColor: "rgba(0, 0, 0, 0.3)",
+                  borderRight: `4px solid ${theme.palette.secondary.main}`,
+                },
+                "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.2)" },
+              })}
             >
               <ListItemIcon sx={{ color: "inherit" }}>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
@@ -90,15 +80,20 @@ const Sidebar = () => {
         ))}
       </List>
       <Divider sx={{ borderColor: "rgba(255, 255, 255, 0.2)" }} />
-
-      {/* 2. Renderiza os itens de admin e logout APENAS se o 'user' existir */}
       {user && (
         <List>
           {navItemsAdmin.map((item) => (
             <ListItem key={item.text} disablePadding>
               <ListItemButton
                 component={NavLink}
-                to={item.path} /* ... (sx props) */
+                to={item.path}
+                sx={(theme) => ({
+                  "&.active": {
+                    backgroundColor: "rgba(0, 0, 0, 0.3)",
+                    borderRight: `4px solid ${theme.palette.secondary.main}`,
+                  },
+                  "&:hover": { backgroundColor: "rgba(0, 0, 0, 0.2)" },
+                })}
               >
                 <ListItemIcon sx={{ color: "inherit" }}>
                   {item.icon}
@@ -117,7 +112,57 @@ const Sidebar = () => {
           </ListItem>
         </List>
       )}
-    </Drawer>
+    </div>
+  );
+};
+
+const Sidebar: React.FC<SidebarProps> = ({
+  drawerWidth,
+  mobileOpen,
+  handleDrawerToggle,
+  user,
+  handleLogout,
+}) => {
+  return (
+    <Box
+      component="nav"
+      sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+      aria-label="menu de navegação principal"
+    >
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: "block", md: "none" },
+          "& .MuiDrawer-paper": {
+            boxSizing: "border-box",
+            width: drawerWidth,
+            backgroundColor: "sidebar.main",
+            color: "sidebar.contrastText",
+          },
+        }}
+      >
+        <SidebarContent user={user} handleLogout={handleLogout} />
+      </Drawer>
+
+      <Drawer
+        variant="permanent"
+        sx={{
+          display: { xs: "none", md: "block" },
+          "& .MuiDrawer-paper": {
+            boxSizing: "border-box",
+            width: drawerWidth,
+            backgroundColor: "sidebar.main",
+            color: "sidebar.contrastText",
+          },
+        }}
+        open
+      >
+        <SidebarContent user={user} handleLogout={handleLogout} />
+      </Drawer>
+    </Box>
   );
 };
 
